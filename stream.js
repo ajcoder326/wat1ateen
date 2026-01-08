@@ -66,15 +66,10 @@ function getStreams(link, type) {
 function getSpeedoStreamExtraction(link) {
     console.log("SpeedoStream extraction:", link);
 
-    // StreamoUpload uses different structure - use browser mode
+    // StreamoUpload uses different structure - extract via browser.get()
     if (link.indexOf("streamoupload") !== -1) {
-        console.log("StreamoUpload detected - using browser mode");
-        return [{
-            server: "StreamoUpload",
-            link: link,
-            type: "browser",
-            quality: "HD"
-        }];
+        console.log("StreamoUpload detected - extracting via browser");
+        return getStreamoUploadExtraction(link);
     }
 
     // Warm up Cloudflare cookies via Interactive Solver / Overlay
@@ -204,6 +199,125 @@ function getSpeedoStreamExtraction(link) {
     } catch (err) {
         console.error("SpeedoStream extraction error:", err);
         return [];
+    }
+}
+
+/**
+ * StreamoUpload Extraction
+ * Uses browser.get() to fetch page with proper cookies, then extracts form data
+ */
+function getStreamoUploadExtraction(link) {
+    console.log("StreamoUpload extraction:", link);
+
+    try {
+        // Must use browser.get() for proper cookies/referrer
+        if (typeof browser === "undefined" || !browser.get) {
+            console.log("No browser available, fallback to browser mode");
+            return [{
+                server: "StreamoUpload",
+                link: link,
+                type: "browser",
+                quality: "HD"
+            }];
+        }
+
+        // Fetch initial page
+        var html = browser.get(link);
+        console.log("StreamoUpload HTML length:", html.length);
+
+        if (!html || html.length < 100) {
+            console.error("Empty response from streamoupload");
+            return [{
+                server: "StreamoUpload",
+                link: link,
+                type: "browser",
+                quality: "HD"
+            }];
+        }
+
+        var $ = cheerio.load(html);
+        var streams = [];
+
+        // Look for download form and extract action/hidden fields
+        var form = $("form[name='F1'], form[action*='dl'], form").first();
+        if (form.length > 0) {
+            var action = form.attr("action") || "";
+            console.log("Form action:", action);
+
+            // Extract hidden fields
+            var formData = {};
+            form.find("input[type='hidden']").each(function () {
+                var name = $(this).attr("name");
+                var value = $(this).attr("value");
+                if (name) formData[name] = value || "";
+            });
+            console.log("Form data keys:", Object.keys(formData).join(", "));
+
+            // Try to find download links directly
+            $("a[href*='/dl?'], a[href*='download']").each(function () {
+                var href = $(this).attr("href") || "";
+                if (href.indexOf("http") !== 0 && href.indexOf("/") === 0) {
+                    href = "https://streamoupload.xyz" + href;
+                }
+                if (href.indexOf("streamoupload") !== -1) {
+                    var text = $(this).text().trim();
+                    streams.push({
+                        server: "StreamoUpload " + (text || "HD"),
+                        link: href,
+                        type: "direct",
+                        quality: text.match(/\d+p/) ? text.match(/\d+p/)[0] : "HD"
+                    });
+                }
+            });
+        }
+
+        // Look for direct video/stream links in the HTML
+        var videoMatch = html.match(/file:\s*["']([^"']+\.(?:mp4|m3u8)[^"']*)['"]/i);
+        if (videoMatch) {
+            console.log("Found video URL in scripts");
+            streams.push({
+                server: "StreamoUpload Direct",
+                link: videoMatch[1],
+                type: "direct",
+                quality: "HD"
+            });
+        }
+
+        // Look for embedded player URLs
+        $("iframe[src], source[src]").each(function () {
+            var src = $(this).attr("src") || "";
+            if (src.indexOf(".mp4") !== -1 || src.indexOf(".m3u8") !== -1) {
+                streams.push({
+                    server: "StreamoUpload Stream",
+                    link: src,
+                    type: "direct",
+                    quality: "HD"
+                });
+            }
+        });
+
+        if (streams.length > 0) {
+            console.log("StreamoUpload streams found:", streams.length);
+            return streams;
+        }
+
+        // Fallback to browser mode
+        console.log("No streams found, fallback to browser");
+        return [{
+            server: "StreamoUpload",
+            link: link,
+            type: "browser",
+            quality: "HD"
+        }];
+
+    } catch (err) {
+        console.error("StreamoUpload error:", err);
+        return [{
+            server: "StreamoUpload",
+            link: link,
+            type: "browser",
+            quality: "HD"
+        }];
     }
 }
 
