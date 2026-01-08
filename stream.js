@@ -66,6 +66,17 @@ function getStreams(link, type) {
 function getSpeedoStreamExtraction(link) {
     console.log("SpeedoStream extraction:", link);
 
+    // StreamoUpload uses different structure - use browser mode
+    if (link.indexOf("streamoupload") !== -1) {
+        console.log("StreamoUpload detected - using browser mode");
+        return [{
+            server: "StreamoUpload",
+            link: link,
+            type: "browser",
+            quality: "HD"
+        }];
+    }
+
     // Warm up Cloudflare cookies via Interactive Solver / Overlay
     if (typeof browser !== "undefined" && browser.get) {
         console.log("Warming up cookies for", link);
@@ -80,10 +91,10 @@ function getSpeedoStreamExtraction(link) {
     };
 
     try {
-        // Step 1: Convert original URL to /d/ format
+        // Step 1: Convert original URL to /d/ format (only for speedostream)
         // https://speedostream1.com/17fo1lpe9a7p.html → https://speedostream1.com/d/17fo1lpe9a7p.html
         var dUrl = link;
-        var baseMatch = link.match(/^(https?:\/\/[^\/]+)\/([\w]+)\.html/);
+        var baseMatch = link.match(/^(https?:\/\/[^\/]+)\/([^\/.]+)\.html/);
         if (baseMatch) {
             var baseUrl = baseMatch[1];
             var fileId = baseMatch[2];
