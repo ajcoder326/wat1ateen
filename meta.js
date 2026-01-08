@@ -184,10 +184,32 @@ function getMetaData(link, providerContext) {
         var linkList = [];
         var directLinks = [];
 
-        // WatchoMovies PsyPlay theme uses .lnk-lnk class for download links
-        // Also check #list-dl section and iframe sources
-        var downloadLinks = $("#list-dl a.lnk-lnk, .lnk-lnk, a[href*='speedostream']");
+        // WatchoMovies may use various selectors - try multiple patterns
+        var downloadLinks = $(
+            "#list-dl a.lnk-lnk, " +
+            ".lnk-lnk, " +
+            ".server-item a, " +
+            ".tab-content a[href*='http'], " +
+            ".download-links a, " +
+            ".dl-links a, " +
+            "a[href*='speedostream'], " +
+            "a[href*='streamwish'], " +
+            "a[href*='filelions'], " +
+            "a[href*='hubcloud'], " +
+            "a[href*='gdrive'], " +
+            "a[href*='gofile'], " +
+            "a[href*='doodstream'], " +
+            "a[href*='streamtape'], " +
+            "a[href*='mixdrop'], " +
+            "a.btn[href*='http']"
+        );
         console.log("Download links found:", downloadLinks.length);
+
+        // Fallback: if no links found, try broader search
+        if (downloadLinks.length === 0) {
+            downloadLinks = $("a[target='_blank'][href*='http']");
+            console.log("Fallback links found:", downloadLinks.length);
+        }
 
         for (var s = 0; s < downloadLinks.length && s < 50; s++) {
             var anchor = downloadLinks.eq(s);
@@ -198,38 +220,52 @@ function getMetaData(link, providerContext) {
             if (!href || href === "#" || href.indexOf("javascript:") === 0) continue;
             if (href.indexOf("http") !== 0) continue;
 
-            // Skip social/sharing links
+            // Skip social/sharing links AND same-site navigation links
             if (href.indexOf("facebook.") !== -1 ||
                 href.indexOf("twitter.") !== -1 ||
                 href.indexOf("telegram.") !== -1 ||
-                href.indexOf("instagram.") !== -1) continue;
+                href.indexOf("instagram.") !== -1 ||
+                href.indexOf("watchomovies.makeup") !== -1) continue;
 
-            // Check if it's a streaming link (speedostream, etc.)
-            if (href.indexOf("speedostream") !== -1 ||
+            // Check if it's a known streaming/download provider
+            var isStreamLink = (
+                href.indexOf("speedostream") !== -1 ||
                 href.indexOf("streamwish") !== -1 ||
                 href.indexOf("filelions") !== -1 ||
                 href.indexOf("streamtape") !== -1 ||
                 href.indexOf("doodstream") !== -1 ||
-                href.indexOf("mixdrop") !== -1) {
+                href.indexOf("mixdrop") !== -1 ||
+                href.indexOf("hubcloud") !== -1 ||
+                href.indexOf("hubdrive") !== -1 ||
+                href.indexOf("gdrive") !== -1 ||
+                href.indexOf("gofile") !== -1 ||
+                href.indexOf("pixeldrain") !== -1 ||
+                href.indexOf("dropbox") !== -1 ||
+                href.indexOf("mega.nz") !== -1 ||
+                href.indexOf("mediafire") !== -1 ||
+                href.indexOf("/e/") !== -1 ||
+                href.indexOf("/embed") !== -1
+            );
 
+            if (isStreamLink) {
                 // Try to extract quality from link text or sibling spans
                 var quality = "";
-                var qualityMatch = linkText.match(/(\d{3,4}p|HD|4K)/i);
+                var qualityMatch = linkText.match(/(\d{3,4}p|HD|4K|720|1080|480)/i);
                 if (qualityMatch) {
                     quality = qualityMatch[0].toUpperCase();
+                    if (quality.match(/^\d+$/)) quality = quality + "p";
                 }
 
-                // Check sibling spans for quality info (WatchoMovies structure)
-                var qualitySpan = anchor.find(".lnk-dl").last();
-                if (qualitySpan.length > 0) {
-                    var spanText = qualitySpan.text().trim();
-                    var spanQualityMatch = spanText.match(/(\d{3,4}p|HD)/i);
-                    if (spanQualityMatch && !quality) {
-                        quality = spanQualityMatch[0].toUpperCase();
+                // Check parent for quality info too
+                var parentText = anchor.parent().text();
+                if (!quality && parentText) {
+                    var parentQualityMatch = parentText.match(/(\d{3,4}p|HD|4K)/i);
+                    if (parentQualityMatch) {
+                        quality = parentQualityMatch[0].toUpperCase();
                     }
                 }
 
-                // Determine server name
+                // Determine server name from URL
                 var server = "Stream";
                 if (href.indexOf("speedostream") !== -1) server = "SpeedoStream";
                 else if (href.indexOf("streamwish") !== -1) server = "StreamWish";
@@ -237,18 +273,36 @@ function getMetaData(link, providerContext) {
                 else if (href.indexOf("streamtape") !== -1) server = "StreamTape";
                 else if (href.indexOf("doodstream") !== -1) server = "DoodStream";
                 else if (href.indexOf("mixdrop") !== -1) server = "MixDrop";
+                else if (href.indexOf("hubcloud") !== -1 || href.indexOf("hubdrive") !== -1) server = "HubCloud";
+                else if (href.indexOf("gdrive") !== -1) server = "GDrive";
+                else if (href.indexOf("gofile") !== -1) server = "GoFile";
+                else if (href.indexOf("pixeldrain") !== -1) server = "PixelDrain";
+                else if (href.indexOf("mega.nz") !== -1) server = "Mega";
+                else if (href.indexOf("mediafire") !== -1) server = "MediaFire";
+                else if (linkText && linkText.length < 25) server = linkText;
 
                 var linkTitle = server;
                 if (quality) {
                     linkTitle = server + " " + quality;
                 }
 
-                directLinks.push({
-                    title: linkTitle,
-                    link: href,
-                    quality: quality,
-                    type: "stream"
-                });
+                // Check for duplicates before adding
+                var isDuplicate = false;
+                for (var dup = 0; dup < directLinks.length; dup++) {
+                    if (directLinks[dup].link === href) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+
+                if (!isDuplicate) {
+                    directLinks.push({
+                        title: linkTitle,
+                        link: href,
+                        quality: quality,
+                        type: "stream"
+                    });
+                }
             }
         }
 
