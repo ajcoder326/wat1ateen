@@ -211,17 +211,30 @@ function getSpeedoStreamExtraction(link) {
 function getStreamoUploadExtraction(link) {
     console.log("StreamoUpload extraction:", link);
 
-    try {
-        // Must use browser.get() for proper cookies/referrer
-        if (typeof browser === "undefined" || !browser.get) {
-            console.log("No browser available, fallback to browser mode");
-            return [{
-                server: "StreamoUpload",
-                link: link,
-                type: "browser",
-                quality: "HD"
-            }];
+    // StreamoUpload is heavily JS-rendered - forms don't exist in initial HTML
+    // Use automation mode to wait for JS to load and interact with the page
+    return [{
+        server: "StreamoUpload",
+        link: link,
+        type: "automate",
+        quality: "HD",
+        automation: {
+            steps: [
+                { action: "wait", duration: 3000 },
+                { action: "click", selector: "input[type='submit'], button[type='submit'], .btn-download, #btn_download" },
+                { action: "wait", duration: 3000 },
+                { action: "click", selector: "a[href*='.mp4'], a[href*='download'], a.btn-success" }
+            ],
+            extractUrl: {
+                selectors: ["a[href*='.mp4']", "a[href*='.mkv']", "video source[src]"],
+                attribute: "href",
+                patterns: [".mp4", ".mkv", ".m3u8"]
+            }
         }
+    }];
+
+    /* OLD CODE - commented out since page is JS-rendered
+    try {
 
         // Fetch initial page
         var html = browser.get(link);
@@ -378,6 +391,7 @@ function getStreamoUploadExtraction(link) {
             quality: "HD"
         }];
     }
+    // END OLD CODE */
 }
 
 /**
