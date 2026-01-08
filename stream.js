@@ -204,7 +204,9 @@ function getSpeedoStreamExtraction(link) {
 
 /**
  * StreamoUpload Extraction
- * Uses browser.get() to fetch page with proper cookies, then extracts form data
+ * StreamoUpload uses a multi-step form submission flow:
+ * 1. Initial page with a form (op, id, hash fields)
+ * 2. POST form to get download link
  */
 function getStreamoUploadExtraction(link) {
     console.log("StreamoUpload extraction:", link);
@@ -224,6 +226,7 @@ function getStreamoUploadExtraction(link) {
         // Fetch initial page
         var html = browser.get(link);
         console.log("StreamoUpload HTML length:", html.length);
+        console.log("StreamoUpload HTML preview:", html.substring(0, 500));
 
         if (!html || html.length < 100) {
             console.error("Empty response from streamoupload");
@@ -238,63 +241,119 @@ function getStreamoUploadExtraction(link) {
         var $ = cheerio.load(html);
         var streams = [];
 
-        // Look for download form and extract action/hidden fields
-        var form = $("form[name='F1'], form[action*='dl'], form").first();
+        // Look for the countdown/download form
+        var form = $("form").first();
         if (form.length > 0) {
-            var action = form.attr("action") || "";
-            console.log("Form action:", action);
+            var action = form.attr("action") || link;
+            var method = (form.attr("method") || "POST").toUpperCase();
+            console.log("Form found - action:", action, "method:", method);
 
-            // Extract hidden fields
+            // Extract ALL form fields (hidden and visible)
             var formData = {};
-            form.find("input[type='hidden']").each(function () {
+            form.find("input").each(function () {
                 var name = $(this).attr("name");
-                var value = $(this).attr("value");
-                if (name) formData[name] = value || "";
-            });
-            console.log("Form data keys:", Object.keys(formData).join(", "));
-
-            // Try to find download links directly
-            $("a[href*='/dl?'], a[href*='download']").each(function () {
-                var href = $(this).attr("href") || "";
-                if (href.indexOf("http") !== 0 && href.indexOf("/") === 0) {
-                    href = "https://streamoupload.xyz" + href;
+                var value = $(this).attr("value") || "";
+                if (name) {
+                    formData[name] = value;
+                    console.log("Form field:", name, "=", value.substring(0, 30));
                 }
-                if (href.indexOf("streamoupload") !== -1) {
-                    var text = $(this).text().trim();
+            });
+
+            // Build POST body
+            var postBody = "";
+            for (var key in formData) {
+                if (postBody) postBody += "&";
+                postBody += encodeURIComponent(key) + "=" + encodeURIComponent(formData[key]);
+            }
+            console.log("POST body:", postBody.substring(0, 100));
+
+            // Submit the form via axios POST
+            if (postBody && Object.keys(formData).length > 0) {
+                var postUrl = action;
+                if (action.indexOf("http") !== 0) {
+                    // Relative URL - build absolute
+                    var urlMatch = link.match(/^(https?:\/\/[^\/]+)/);
+                    if (urlMatch) {
+                        postUrl = urlMatch[1] + (action.indexOf("/") === 0 ? action : "/" + action);
+                    }
+                }
+
+                console.log("Submitting form to:", postUrl);
+
+                var postHeaders = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": link,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "text/html,application/xhtml+xml"
+                };
+
+                try {
+                    var resp = axios.post(postUrl, postBody, { headers: postHeaders });
+                    var html2 = resp.data;
+                    console.log("POST response length:", html2.length);
+
+                    var $2 = cheerio.load(html2);
+
+                    // Look for direct download links (often with class or containing 'download')
+                    $2("a").each(function () {
+                        var href = $2(this).attr("href") || "";
+                        var text = $2(this).text().trim().toLowerCase();
+
+                        // Check if it's a video/download link
+                        if (href.indexOf(".mp4") !== -1 ||
+                            href.indexOf(".mkv") !== -1 ||
+                            href.indexOf("download") !== -1 ||
+                            text.indexOf("download") !== -1 ||
+                            text.indexOf("direct") !== -1) {
+
+                            console.log("Found download link:", href.substring(0, 60));
+                            streams.push({
+                                server: "StreamoUpload",
+                                link: href,
+                                type: "direct",
+                                quality: "HD",
+                                headers: { "Referer": postUrl }
+                            });
+                        }
+                    });
+
+                    // Also check for video URLs in scripts
+                    var videoMatch = html2.match(/(?:file|source|src)[\s]*[:=][\s]*["']([^"']+\.(?:mp4|mkv|m3u8)[^"']*)['"]/i);
+                    if (videoMatch && videoMatch[1]) {
+                        console.log("Found video in script:", videoMatch[1].substring(0, 50));
+                        streams.push({
+                            server: "StreamoUpload Direct",
+                            link: videoMatch[1],
+                            type: "direct",
+                            quality: "HD"
+                        });
+                    }
+
+                } catch (postErr) {
+                    console.error("POST failed:", postErr.message || postErr);
+                }
+            }
+        }
+
+        // If no streams found, look in the original HTML
+        if (streams.length === 0) {
+            // Check for direct links
+            $("a[href*='.mp4'], a[href*='.mkv'], a[href*='download']").each(function () {
+                var href = $(this).attr("href") || "";
+                if (href.indexOf("http") === 0 || href.indexOf("/") === 0) {
+                    if (href.indexOf("/") === 0) {
+                        var base = link.match(/^(https?:\/\/[^\/]+)/);
+                        if (base) href = base[1] + href;
+                    }
                     streams.push({
-                        server: "StreamoUpload " + (text || "HD"),
+                        server: "StreamoUpload",
                         link: href,
                         type: "direct",
-                        quality: text.match(/\d+p/) ? text.match(/\d+p/)[0] : "HD"
+                        quality: "HD"
                     });
                 }
             });
         }
-
-        // Look for direct video/stream links in the HTML
-        var videoMatch = html.match(/file:\s*["']([^"']+\.(?:mp4|m3u8)[^"']*)['"]/i);
-        if (videoMatch) {
-            console.log("Found video URL in scripts");
-            streams.push({
-                server: "StreamoUpload Direct",
-                link: videoMatch[1],
-                type: "direct",
-                quality: "HD"
-            });
-        }
-
-        // Look for embedded player URLs
-        $("iframe[src], source[src]").each(function () {
-            var src = $(this).attr("src") || "";
-            if (src.indexOf(".mp4") !== -1 || src.indexOf(".m3u8") !== -1) {
-                streams.push({
-                    server: "StreamoUpload Stream",
-                    link: src,
-                    type: "direct",
-                    quality: "HD"
-                });
-            }
-        });
 
         if (streams.length > 0) {
             console.log("StreamoUpload streams found:", streams.length);
@@ -311,7 +370,7 @@ function getStreamoUploadExtraction(link) {
         }];
 
     } catch (err) {
-        console.error("StreamoUpload error:", err);
+        console.error("StreamoUpload error:", err.message || err);
         return [{
             server: "StreamoUpload",
             link: link,
