@@ -193,6 +193,7 @@ function getMetaData(link, providerContext) {
             ".download-links a, " +
             ".dl-links a, " +
             "a[href*='speedostream'], " +
+            "a[href*='streamoupload'], " +
             "a[href*='streamwish'], " +
             "a[href*='filelions'], " +
             "a[href*='hubcloud'], " +
@@ -230,6 +231,7 @@ function getMetaData(link, providerContext) {
             // Check if it's a known streaming/download provider
             var isStreamLink = (
                 href.indexOf("speedostream") !== -1 ||
+                href.indexOf("streamoupload") !== -1 ||
                 href.indexOf("streamwish") !== -1 ||
                 href.indexOf("filelions") !== -1 ||
                 href.indexOf("streamtape") !== -1 ||
@@ -267,7 +269,7 @@ function getMetaData(link, providerContext) {
 
                 // Determine server name from URL
                 var server = "Stream";
-                if (href.indexOf("speedostream") !== -1) server = "SpeedoStream";
+                if (href.indexOf("speedostream") !== -1 || href.indexOf("streamoupload") !== -1) server = "SpeedoStream";
                 else if (href.indexOf("streamwish") !== -1) server = "StreamWish";
                 else if (href.indexOf("filelions") !== -1) server = "FileLions";
                 else if (href.indexOf("streamtape") !== -1) server = "StreamTape";

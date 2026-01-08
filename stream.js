@@ -19,8 +19,8 @@ var headers = {
 function getStreams(link, type) {
     console.log("getStreams called with:", link);
 
-    // SpeedoStream - most common on WatchoMovies
-    if (link.indexOf("speedostream") !== -1) {
+    // SpeedoStream / StreamoUpload - most common on WatchoMovies
+    if (link.indexOf("speedostream") !== -1 || link.indexOf("streamoupload") !== -1) {
         return getSpeedoStreamExtraction(link);
     }
 
