@@ -213,11 +213,16 @@ function getStreamoUploadExtraction(link) {
 
     // StreamoUpload is heavily JS-rendered - forms don't exist in initial HTML
     // Use browser mode so user can manually interact with the page
+    // Include headers with proper Referer so page loads correctly
     return [{
         server: "StreamoUpload",
         link: link,
         type: "browser",
-        quality: "HD"
+        quality: "HD",
+        headers: {
+            "Referer": "https://watchomovies.makeup/",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        }
     }];
 
     /* OLD CODE - commented out since page is JS-rendered
