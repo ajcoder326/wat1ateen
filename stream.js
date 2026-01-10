@@ -212,25 +212,12 @@ function getStreamoUploadExtraction(link) {
     console.log("StreamoUpload extraction:", link);
 
     // StreamoUpload is heavily JS-rendered - forms don't exist in initial HTML
-    // Use automation mode to wait for JS to load and interact with the page
+    // Use browser mode so user can manually interact with the page
     return [{
         server: "StreamoUpload",
         link: link,
-        type: "automate",
-        quality: "HD",
-        automation: {
-            steps: [
-                { action: "wait", duration: 3000 },
-                { action: "click", selector: "input[type='submit'], button[type='submit'], .btn-download, #btn_download" },
-                { action: "wait", duration: 3000 },
-                { action: "click", selector: "a[href*='.mp4'], a[href*='download'], a.btn-success" }
-            ],
-            extractUrl: {
-                selectors: ["a[href*='.mp4']", "a[href*='.mkv']", "video source[src]"],
-                attribute: "href",
-                patterns: [".mp4", ".mkv", ".m3u8"]
-            }
-        }
+        type: "browser",
+        quality: "HD"
     }];
 
     /* OLD CODE - commented out since page is JS-rendered
